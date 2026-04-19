@@ -1,0 +1,761 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ソリティア Can't Stop</title>
+  <style>
+    :root {
+      --bg: #f6f7fb;
+      --panel: #ffffff;
+      --line: #d9dce7;
+      --text: #1f2430;
+      --muted: #69707d;
+      --fixed: #2f6fed;
+      --temp: #f39c12;
+      --done: #27ae60;
+      --danger: #d64545;
+      --shadow: 0 6px 18px rgba(0,0,0,0.08);
+      --radius: 16px;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Hiragino Sans",
+        "Hiragino Kaku Gothic ProN", "Yu Gothic", sans-serif;
+      background: var(--bg);
+      color: var(--text);
+    }
+
+    .app {
+      max-width: 1300px;
+      margin: 0 auto;
+      padding: 16px;
+    }
+
+    .header {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      padding: 16px 18px;
+      margin-bottom: 16px;
+    }
+
+    .header h1 {
+      margin: 0 0 8px;
+      font-size: 1.5rem;
+    }
+
+    .header p {
+      margin: 6px 0 0;
+      color: var(--muted);
+      line-height: 1.5;
+      font-size: 0.95rem;
+    }
+
+    .layout {
+      display: grid;
+      grid-template-columns: minmax(0, 1.45fr) minmax(320px, 0.95fr);
+      gap: 16px;
+      align-items: start;
+    }
+
+    .board-panel,
+    .control-panel {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      padding: 16px;
+    }
+
+    .control-panel {
+      position: sticky;
+      top: 16px;
+    }
+
+    .section-title {
+      font-size: 1.05rem;
+      font-weight: 700;
+      margin: 0 0 12px;
+    }
+
+    .legend {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px 14px;
+      margin-bottom: 14px;
+      font-size: 0.9rem;
+      color: var(--muted);
+    }
+
+    .legend-item {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .legend-dot {
+      width: 14px;
+      height: 14px;
+      border-radius: 999px;
+      border: 1px solid #b8bfcc;
+      background: #fff;
+    }
+
+    .legend-dot.fixed { background: var(--fixed); border-color: var(--fixed); }
+    .legend-dot.temp { background: var(--temp); border-color: var(--temp); }
+    .legend-dot.done { background: var(--done); border-color: var(--done); }
+
+    .vertical-board-wrap {
+      overflow-x: auto;
+      padding-bottom: 8px;
+    }
+
+    .vertical-board {
+      display: grid;
+      grid-template-columns: repeat(11, minmax(48px, 1fr));
+      gap: 10px;
+      align-items: end;
+      min-width: 680px;
+      padding-top: 8px;
+    }
+
+    .mountain {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 8px;
+      border-radius: 14px;
+      padding: 8px 6px;
+      transition: background-color 0.15s ease, border-color 0.15s ease;
+      border: 1px solid transparent;
+    }
+
+    .mountain.active {
+      background: rgba(243, 156, 18, 0.10);
+      border-color: rgba(243, 156, 18, 0.35);
+    }
+
+    .mountain.completed {
+      background: rgba(39, 174, 96, 0.08);
+      border-color: rgba(39, 174, 96, 0.28);
+    }
+
+    .mountain-track {
+      height: 360px;
+      display: flex;
+      flex-direction: column-reverse;
+      justify-content: flex-start;
+      align-items: center;
+      gap: 6px;
+      padding: 8px 0;
+    }
+
+    .mountain-label {
+      font-weight: 700;
+      font-variant-numeric: tabular-nums;
+      color: var(--text);
+      line-height: 1;
+    }
+
+    .mountain-label.top {
+      color: var(--muted);
+      font-size: 0.9rem;
+    }
+
+    .mountain-label.bottom {
+      font-size: 1rem;
+    }
+
+    .cell {
+      width: 22px;
+      height: 22px;
+      border-radius: 999px;
+      border: 1.5px solid #b8bfcc;
+      background: white;
+      display: inline-block;
+    }
+
+    .cell.fixed {
+      background: var(--fixed);
+      border-color: var(--fixed);
+    }
+
+    .cell.temp {
+      background: var(--temp);
+      border-color: var(--temp);
+    }
+
+    .cell.done {
+      background: var(--done);
+      border-color: var(--done);
+    }
+
+    .status-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      margin-bottom: 14px;
+    }
+
+    .status-card {
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 12px;
+      background: #fbfcff;
+    }
+
+    .status-card .small {
+      color: var(--muted);
+      font-size: 0.85rem;
+      margin-bottom: 4px;
+    }
+
+    .status-card .big {
+      font-size: 1.15rem;
+      font-weight: 700;
+    }
+
+    .dice-row {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin-bottom: 14px;
+    }
+
+    .die {
+      width: 46px;
+      height: 46px;
+      border-radius: 12px;
+      border: 1px solid var(--line);
+      background: #fff;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.3rem;
+      font-weight: 700;
+      box-shadow: inset 0 1px 0 rgba(255,255,255,0.6);
+    }
+
+    .buttons {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin-bottom: 14px;
+    }
+
+    button {
+      appearance: none;
+      border: none;
+      border-radius: 12px;
+      padding: 12px 16px;
+      font-size: 1rem;
+      font-weight: 700;
+      cursor: pointer;
+      background: #e9edf7;
+      color: var(--text);
+    }
+
+    button.primary {
+      background: var(--fixed);
+      color: #fff;
+    }
+
+    button.success {
+      background: var(--done);
+      color: #fff;
+    }
+
+    button.danger {
+      background: var(--danger);
+      color: #fff;
+    }
+
+    button:disabled {
+      opacity: 0.45;
+      cursor: not-allowed;
+    }
+
+    .message {
+      border-radius: 12px;
+      padding: 12px 14px;
+      background: #f3f6fd;
+      border: 1px solid #dbe4fb;
+      margin-bottom: 14px;
+      line-height: 1.5;
+    }
+
+    .message.burst {
+      background: #fff3f3;
+      border-color: #f2c6c6;
+    }
+
+    .options {
+      display: grid;
+      gap: 10px;
+    }
+
+    .option-btn {
+      width: 100%;
+      text-align: left;
+      border: 1px solid var(--line);
+      background: #fff;
+      color: var(--text);
+      padding: 12px 14px;
+      border-radius: 12px;
+      font-size: 1rem;
+      font-weight: 700;
+    }
+
+    .option-btn .sub {
+      display: block;
+      font-size: 0.85rem;
+      color: var(--muted);
+      font-weight: 500;
+      margin-top: 4px;
+      line-height: 1.4;
+    }
+
+    .rules {
+      margin-top: 14px;
+      border-top: 1px solid var(--line);
+      padding-top: 14px;
+      color: var(--muted);
+      font-size: 0.92rem;
+      line-height: 1.6;
+    }
+
+    .footer-note {
+      margin-top: 12px;
+      font-size: 0.85rem;
+      color: var(--muted);
+    }
+
+    @media (max-width: 920px) {
+      .layout {
+        grid-template-columns: 1fr;
+      }
+      .control-panel {
+        position: static;
+      }
+      .mountain-track {
+        height: 300px;
+      }
+    }
+
+    @media (max-width: 520px) {
+      .cell {
+        width: 18px;
+        height: 18px;
+      }
+      .die {
+        width: 42px;
+        height: 42px;
+      }
+      .status-grid {
+        grid-template-columns: 1fr;
+      }
+      button, .option-btn {
+        font-size: 0.96rem;
+      }
+      .vertical-board {
+        gap: 8px;
+        min-width: 560px;
+      }
+      .mountain-track {
+        height: 260px;
+        gap: 5px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <div class="header">
+      <h1>ソリティア Can't Stop</h1>
+    </div>
+
+    <div class="layout">
+      <section class="board-panel">
+        <h2 class="section-title">山の状況</h2>
+        <div class="legend">
+          <div class="legend-item"><span class="legend-dot fixed"></span> キャンプ設置済み</div>
+          <div class="legend-item"><span class="legend-dot temp"></span> 今回の登山</div>
+          <div class="legend-item"><span class="legend-dot done"></span> 登頂した山</div>
+        </div>
+
+        <div class="vertical-board-wrap">
+          <div id="board" class="vertical-board"></div>
+        </div>
+
+        <div class="footer-note">3つの山に登頂するとクリアです。</div>
+      </section>
+
+      <aside class="control-panel">
+        <h2 class="section-title">操作</h2>
+
+        <div class="status-grid">
+          <div class="status-card">
+            <div class="small">登頂した山</div>
+            <div class="big"><span id="completedCount">0</span> / 3</div>
+          </div>
+          <div class="status-card">
+            <div class="small">現在登っている山</div>
+            <div class="big" id="activeCols">なし</div>
+          </div>
+          <div class="status-card">
+            <div class="small">経過ラウンド</div>
+            <div class="big" id="turnCount">0</div>
+          </div>
+          <div class="status-card">
+            <div class="small">状態</div>
+            <div class="big" id="phaseText">待機中</div>
+          </div>
+        </div>
+
+        <div class="dice-row" id="diceRow">
+          <div class="die">-</div>
+          <div class="die">-</div>
+          <div class="die">-</div>
+          <div class="die">-</div>
+        </div>
+
+        <div class="buttons">
+          <button id="rollBtn" class="primary">登山を続ける</button>
+          <button id="stopBtn" class="success" disabled>キャンプを張る</button>
+          <button id="resetBtn" class="danger">最初から登り直す</button>
+        </div>
+
+        <div id="message" class="message">
+          「登山を続ける」を押して開始してください。
+        </div>
+
+        <div id="options" class="options"></div>
+
+        <div class="rules">
+          <strong>ルール要点</strong><br />
+          ・サイコロ4個を2組に分けた結果から、1つの組合せを選びます。<br />
+          ・選んだ組合せの<strong>2つの和を両方使って</strong>進めます。<br />
+          ・同じ和が2回出たら、その山を2マス進めます。<br />
+          ・1ラウンドで新しく使える山は合計3つまでです。<br />
+          ・使える組合せがなければ滑落です。<br />
+          ・「キャンプを張る」または「滑落」で1ラウンド終了です。
+        </div>
+      </aside>
+    </div>
+  </div>
+
+  <script>
+    (function () {
+      const LENGTHS = {
+        2: 3, 3: 5, 4: 7, 5: 9, 6: 11, 7: 13,
+        8: 11, 9: 9, 10: 7, 11: 5, 12: 3
+      };
+
+      let state;
+
+      function createInitialState() {
+        const columns = {};
+        for (let n = 2; n <= 12; n++) {
+          columns[n] = {
+            max: LENGTHS[n],
+            fixed: 0,
+            temp: 0,
+            completed: false
+          };
+        }
+        return {
+          columns,
+          dice: [],
+          rolled: false,
+          gameOver: false,
+          win: false,
+          turnCount: 0,
+          message: "「登山を続ける」を押して開始してください。",
+          messageType: "normal"
+        };
+      }
+
+      function currentHeight(n) {
+        const col = state.columns[n];
+        return Math.min(col.max, col.fixed + col.temp);
+      }
+
+      function tempActiveColumns() {
+        return Object.keys(state.columns)
+          .map(Number)
+          .filter(n => state.columns[n].temp > 0);
+      }
+
+      function completedColumns() {
+        return Object.keys(state.columns)
+          .map(Number)
+          .filter(n => state.columns[n].completed);
+      }
+
+      function rollDie() {
+        return Math.floor(Math.random() * 6) + 1;
+      }
+
+      function pairings(d) {
+        return [
+          { sums: [d[0] + d[1], d[2] + d[3]] },
+          { sums: [d[0] + d[2], d[1] + d[3]] },
+          { sums: [d[0] + d[3], d[1] + d[2]] }
+        ];
+      }
+
+      function canonicalSums(sums) {
+        return [...sums].sort((a, b) => a - b);
+      }
+
+      function canApplyMove(sums) {
+        const active = tempActiveColumns();
+        const activeSet = new Set(active);
+        const neededNew = new Set();
+
+        for (const s of sums) {
+          const col = state.columns[s];
+          if (!col || col.completed) return false;
+          if (currentHeight(s) >= col.max) return false;
+          if (!activeSet.has(s)) neededNew.add(s);
+        }
+
+        return active.length + neededNew.size <= 3;
+      }
+
+      function applyMove(sums) {
+        for (const s of sums) {
+          const col = state.columns[s];
+          if (col.completed) continue;
+          const remaining = col.max - currentHeight(s);
+          if (remaining > 0) col.temp += 1;
+        }
+      }
+
+      function clearTempProgress() {
+        for (let n = 2; n <= 12; n++) state.columns[n].temp = 0;
+      }
+
+      function commitTempProgress() {
+        for (let n = 2; n <= 12; n++) {
+          const col = state.columns[n];
+          col.fixed = Math.min(col.max, col.fixed + col.temp);
+          col.temp = 0;
+          if (col.fixed >= col.max) col.completed = true;
+        }
+      }
+
+      function describeSums(sums) {
+        return sums[0] === sums[1]
+          ? `${sums[0]} の山を2マス進む`
+          : `${sums[0]} と ${sums[1]} の山を1マスずつ進む`;
+      }
+
+      function phaseLabel() {
+        if (state.win) return "登頂完了";
+        if (state.rolled) return "ルート選択中";
+        if (tempActiveColumns().length > 0) return "登山中";
+        return "待機中";
+      }
+
+      function renderBoard() {
+        const board = document.getElementById("board");
+        board.innerHTML = "";
+
+        for (let n = 2; n <= 12; n++) {
+          const mountain = document.createElement("div");
+          mountain.className = "mountain";
+
+          const col = state.columns[n];
+          if (col.temp > 0 && !col.completed) {
+            mountain.classList.add("active");
+          }
+          if (col.completed) {
+            mountain.classList.add("completed");
+          }
+
+          const topLabel = document.createElement("div");
+          topLabel.className = "mountain-label top";
+          topLabel.textContent = n;
+
+          const track = document.createElement("div");
+          track.className = "mountain-track";
+
+          const fixed = col.fixed;
+          const tempTop = Math.min(col.max, col.fixed + col.temp);
+
+          for (let i = 1; i <= col.max; i++) {
+            const cell = document.createElement("span");
+            cell.className = "cell";
+
+            if (col.completed) {
+              cell.classList.add("done");
+            } else if (i <= fixed) {
+              cell.classList.add("fixed");
+            } else if (i <= tempTop) {
+              cell.classList.add("temp");
+            }
+
+            track.appendChild(cell);
+          }
+
+          const bottomLabel = document.createElement("div");
+          bottomLabel.className = "mountain-label bottom";
+          bottomLabel.textContent = n;
+
+          mountain.appendChild(topLabel);
+          mountain.appendChild(track);
+          mountain.appendChild(bottomLabel);
+          board.appendChild(mountain);
+        }
+
+        document.getElementById("completedCount").textContent = completedColumns().length;
+        const active = tempActiveColumns();
+        document.getElementById("activeCols").textContent = active.length ? active.join(", ") : "なし";
+        document.getElementById("turnCount").textContent = state.turnCount;
+        document.getElementById("phaseText").textContent = phaseLabel();
+      }
+
+      function renderDice() {
+        const diceRow = document.getElementById("diceRow");
+        diceRow.innerHTML = "";
+        const dice = state.dice.length ? state.dice : ["-", "-", "-", "-"];
+
+        dice.forEach(v => {
+          const die = document.createElement("div");
+          die.className = "die";
+          die.textContent = v;
+          diceRow.appendChild(die);
+        });
+      }
+
+      function renderMessage() {
+        const box = document.getElementById("message");
+        box.textContent = state.message;
+        box.className = state.messageType === "burst" ? "message burst" : "message";
+      }
+
+      function availableOptionsFromDice(dice) {
+        const raw = pairings(dice);
+        const uniqueMap = new Map();
+
+        raw.forEach(p => {
+          const normalized = canonicalSums(p.sums);
+          const key = normalized.join("-");
+          if (!uniqueMap.has(key)) {
+            uniqueMap.set(key, { sums: normalized });
+          }
+        });
+
+        return Array.from(uniqueMap.values()).filter(p => canApplyMove(p.sums));
+      }
+
+      function renderOptions(options) {
+        const optionsDiv = document.getElementById("options");
+        optionsDiv.innerHTML = "";
+
+        if (state.gameOver || state.win || !state.rolled || options.length === 0) return;
+
+        options.forEach((opt, idx) => {
+          const btn = document.createElement("button");
+          btn.className = "option-btn";
+          btn.innerHTML = `ルート${idx + 1}：${opt.sums[0]} と ${opt.sums[1]} の山を進む<span class="sub">${describeSums(opt.sums)}</span>`;
+          btn.addEventListener("click", function () {
+            chooseOption(opt);
+          });
+          optionsDiv.appendChild(btn);
+        });
+      }
+
+      function renderButtons() {
+        const rollBtn = document.getElementById("rollBtn");
+        const stopBtn = document.getElementById("stopBtn");
+
+        rollBtn.disabled = state.gameOver || state.win || state.rolled;
+        stopBtn.disabled = state.gameOver || state.win || tempActiveColumns().length === 0;
+      }
+
+      function render() {
+        renderBoard();
+        renderDice();
+        renderMessage();
+        renderButtons();
+        const opts = state.rolled ? availableOptionsFromDice(state.dice) : [];
+        renderOptions(opts);
+      }
+
+      function handleRoll() {
+        if (state.gameOver || state.win || state.rolled) return;
+
+        state.dice = [rollDie(), rollDie(), rollDie(), rollDie()];
+        state.rolled = true;
+
+        const options = availableOptionsFromDice(state.dice);
+
+        if (options.length === 0) {
+          clearTempProgress();
+          state.rolled = false;
+          state.turnCount += 1;
+          state.message = `滑落しました。このラウンドの進みは失われます。経過ラウンド: ${state.turnCount}`;
+          state.messageType = "burst";
+        } else {
+          state.message = "進みたいルートを1つ選んでください。";
+          state.messageType = "normal";
+        }
+
+        render();
+      }
+
+      function chooseOption(opt) {
+        if (!state.rolled || state.gameOver || state.win) return;
+        if (!canApplyMove(opt.sums)) return;
+
+        applyMove(opt.sums);
+        state.rolled = false;
+        state.message = `「${opt.sums[0]} と ${opt.sums[1]} の山」を進めました。さらに登るなら「登山を続ける」、ここで終えるなら「キャンプを張る」を押してください。`;
+        state.messageType = "normal";
+        render();
+      }
+
+      function handleStop() {
+        if (state.gameOver || state.win) return;
+        if (tempActiveColumns().length === 0) return;
+
+        commitTempProgress();
+        state.rolled = false;
+        state.dice = [];
+        state.turnCount += 1;
+        state.message = `キャンプを張りました。ここまでの進みを確定しました。経過ラウンド: ${state.turnCount}`;
+        state.messageType = "normal";
+
+        if (completedColumns().length >= 3) {
+          state.win = true;
+          state.message = `クリアです。3つの山に登頂しました。経過ラウンド: ${state.turnCount}`;
+        }
+
+        render();
+      }
+
+      function handleReset() {
+        state = createInitialState();
+        render();
+      }
+
+      function init() {
+        state = createInitialState();
+        document.getElementById("rollBtn").addEventListener("click", handleRoll);
+        document.getElementById("stopBtn").addEventListener("click", handleStop);
+        document.getElementById("resetBtn").addEventListener("click", handleReset);
+        render();
+      }
+
+      init();
+    })();
+  </script>
+</body>
+</html>
