@@ -439,7 +439,7 @@
         <div class="rules">
           <strong>ルール要点</strong><br />
           ・サイコロ4個を2組に分けた結果から、1つの組合せを選びます。<br />
-          ・選んだ組合せの2つの和を使って進みます</strong>。<br />
+          ・選んだ組合せの<strong>2つの和のうち、使えるものを進めます</strong>。<br />
           ・2つとも使える場合は両方進みます。片方しか使えない場合は片方だけ進みます。<br />
           ・同じ和が2回出たら、その山を可能な範囲で2マス進めます。<br />
           ・1ラウンドで新しく使える山は合計3つまでです。<br />
@@ -514,39 +514,77 @@
         return [...sums].sort((a, b) => a - b);
       }
 
-      function canUseSum(s, activeSet, newColumnsSet) {
-        const col = state.columns[s];
-        if (!col || col.completed) return false;
-        if (currentHeight(s) >= col.max) return false;
-        if (activeSet.has(s)) return true;
-        return tempActiveColumns().length + newColumnsSet.size < 3;
-      }
-
-      function playableSums(sums) {
+      function canApplyMoveList(moveSums) {
         const activeSet = new Set(tempActiveColumns());
         const newColumnsSet = new Set();
-        const playable = [];
+        const plannedCounts = {};
 
-        for (const s of sums) {
-          if (canUseSum(s, activeSet, newColumnsSet)) {
-            playable.push(s);
-            if (!activeSet.has(s)) newColumnsSet.add(s);
+        for (const s of moveSums) {
+          const col = state.columns[s];
+          const alreadyPlanned = plannedCounts[s] || 0;
+
+          if (!col || col.completed) return false;
+          if (currentHeight(s) + alreadyPlanned >= col.max) return false;
+
+          if (!activeSet.has(s) && !newColumnsSet.has(s)) {
+            if (activeSet.size + newColumnsSet.size >= 3) return false;
+            newColumnsSet.add(s);
           }
+
+          plannedCounts[s] = alreadyPlanned + 1;
         }
 
-        return playable;
+        return moveSums.length > 0;
+      }
+
+      function playableMoveOptions(sums) {
+        const normalized = canonicalSums(sums);
+        const fullMove = [...normalized];
+        const options = [];
+
+        // 2つとも進められる場合は、正式ルールに合わせて両方進める。
+        if (canApplyMoveList(fullMove)) {
+          return [{ routeSums: normalized, moveSums: fullMove }];
+        }
+
+        // 両方は無理だが片方なら進められる場合は、進める山を選べるようにする。
+        const singleMoves = normalized[0] === normalized[1]
+          ? [[normalized[0]]]
+          : [[normalized[0]], [normalized[1]]];
+
+        singleMoves.forEach(moveSums => {
+          if (canApplyMoveList(moveSums)) {
+            options.push({ routeSums: normalized, moveSums });
+          }
+        });
+
+        return options;
       }
 
       function canApplyMove(sums) {
-        return playableSums(sums).length > 0;
+        return playableMoveOptions(sums).length > 0;
       }
 
-      function applyMove(sums) {
-        for (const s of playableSums(sums)) {
+      function applyMove(moveSums) {
+        for (const s of moveSums) {
           const col = state.columns[s];
           const remaining = col.max - currentHeight(s);
           if (remaining > 0) col.temp += 1;
         }
+      }
+
+      function describeMove(moveSums) {
+        if (moveSums.length === 0) return "進める山がありません";
+
+        if (moveSums.length === 2 && moveSums[0] === moveSums[1]) {
+          return `${moveSums[0]} の山を2マス進む`;
+        }
+
+        if (moveSums.length === 2) {
+          return `${moveSums[0]} と ${moveSums[1]} の山を1マスずつ進む`;
+        }
+
+        return `${moveSums[0]} の山を1マス進む`;
       }
 
       function clearTempProgress() {
@@ -560,24 +598,6 @@
           col.temp = 0;
           if (col.fixed >= col.max) col.completed = true;
         }
-      }
-
-      function describeSums(sums) {
-        const playable = playableSums(sums);
-
-        if (playable.length === 0) return "進める山がありません";
-
-        if (sums[0] === sums[1]) {
-          return playable.length === 2
-            ? `${sums[0]} の山を2マス進む`
-            : `${sums[0]} の山を1マス進む`;
-        }
-
-        if (playable.length === 2) {
-          return `${sums[0]} と ${sums[1]} の山を1マスずつ進む`;
-        }
-
-        return `${playable[0]} の山だけ1マス進む`;
       }
 
       function phaseLabel() {
@@ -676,7 +696,18 @@
           }
         });
 
-        return Array.from(uniqueMap.values()).filter(p => canApplyMove(p.sums));
+        const routeOptions = [];
+        Array.from(uniqueMap.values()).forEach(route => {
+          routeOptions.push(...playableMoveOptions(route.sums));
+        });
+
+        const moveMap = new Map();
+        routeOptions.forEach(opt => {
+          const key = `${opt.routeSums.join("-")}|${opt.moveSums.join("-")}`;
+          if (!moveMap.has(key)) moveMap.set(key, opt);
+        });
+
+        return Array.from(moveMap.values());
       }
 
       function renderOptions(options) {
@@ -688,7 +719,7 @@
         options.forEach((opt, idx) => {
           const btn = document.createElement("button");
           btn.className = "option-btn";
-          btn.innerHTML = `ルート${idx + 1}：${opt.sums[0]} と ${opt.sums[1]} の山を進む<span class="sub">${describeSums(opt.sums)}</span>`;
+          btn.innerHTML = `ルート${idx + 1}：${opt.routeSums[0]} と ${opt.routeSums[1]} → ${describeMove(opt.moveSums)}<span class="sub">このルートで実際に進める山を選びます</span>`;
           btn.addEventListener("click", function () {
             chooseOption(opt);
           });
@@ -728,7 +759,7 @@
           state.message = `滑落しました。このラウンドの進みは失われます。経過ラウンド: ${state.turnCount}`;
           state.messageType = "burst";
         } else {
-          state.message = "進みたいルートを1つ選んでください。";
+          state.message = "進みたいルートを選んでください。片方だけ進められる場合は、進める山も選べます。";
           state.messageType = "normal";
         }
 
@@ -737,11 +768,11 @@
 
       function chooseOption(opt) {
         if (!state.rolled || state.gameOver || state.win) return;
-        if (!canApplyMove(opt.sums)) return;
+        if (!canApplyMoveList(opt.moveSums)) return;
 
-        applyMove(opt.sums);
+        applyMove(opt.moveSums);
         state.rolled = false;
-        state.message = `「${describeSums(opt.sums)}」を実行しました。さらに登るなら「登山を続ける」、ここで終えるなら「キャンプを張る」を押してください。`;
+        state.message = `「${describeMove(opt.moveSums)}」を実行しました。さらに登るなら「登山を続ける」、ここで終えるなら「キャンプを張る」を押してください。`;
         state.messageType = "normal";
         render();
       }
