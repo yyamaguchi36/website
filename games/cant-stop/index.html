@@ -439,10 +439,11 @@
         <div class="rules">
           <strong>ルール要点</strong><br />
           ・サイコロ4個を2組に分けた結果から、1つの組合せを選びます。<br />
-          ・選んだ組合せの<strong>2つの和を両方使って</strong>進めます。<br />
-          ・同じ和が2回出たら、その山を2マス進めます。<br />
+          ・選んだ組合せの<strong>2つの和のうち、使えるものを進めます</strong>。<br />
+          ・2つとも使える場合は両方進みます。片方しか使えない場合は片方だけ進みます。<br />
+          ・同じ和が2回出たら、その山を可能な範囲で2マス進めます。<br />
           ・1ラウンドで新しく使える山は合計3つまでです。<br />
-          ・使える組合せがなければ滑落です。<br />
+          ・どの組合せでも1つも進められなければ滑落です。<br />
           ・「キャンプを張る」または「滑落」で1ラウンド終了です。
         </div>
       </aside>
@@ -513,25 +514,36 @@
         return [...sums].sort((a, b) => a - b);
       }
 
-      function canApplyMove(sums) {
-        const active = tempActiveColumns();
-        const activeSet = new Set(active);
-        const neededNew = new Set();
+      function canUseSum(s, activeSet, newColumnsSet) {
+        const col = state.columns[s];
+        if (!col || col.completed) return false;
+        if (currentHeight(s) >= col.max) return false;
+        if (activeSet.has(s)) return true;
+        return tempActiveColumns().length + newColumnsSet.size < 3;
+      }
+
+      function playableSums(sums) {
+        const activeSet = new Set(tempActiveColumns());
+        const newColumnsSet = new Set();
+        const playable = [];
 
         for (const s of sums) {
-          const col = state.columns[s];
-          if (!col || col.completed) return false;
-          if (currentHeight(s) >= col.max) return false;
-          if (!activeSet.has(s)) neededNew.add(s);
+          if (canUseSum(s, activeSet, newColumnsSet)) {
+            playable.push(s);
+            if (!activeSet.has(s)) newColumnsSet.add(s);
+          }
         }
 
-        return active.length + neededNew.size <= 3;
+        return playable;
+      }
+
+      function canApplyMove(sums) {
+        return playableSums(sums).length > 0;
       }
 
       function applyMove(sums) {
-        for (const s of sums) {
+        for (const s of playableSums(sums)) {
           const col = state.columns[s];
-          if (col.completed) continue;
           const remaining = col.max - currentHeight(s);
           if (remaining > 0) col.temp += 1;
         }
@@ -551,9 +563,21 @@
       }
 
       function describeSums(sums) {
-        return sums[0] === sums[1]
-          ? `${sums[0]} の山を2マス進む`
-          : `${sums[0]} と ${sums[1]} の山を1マスずつ進む`;
+        const playable = playableSums(sums);
+
+        if (playable.length === 0) return "進める山がありません";
+
+        if (sums[0] === sums[1]) {
+          return playable.length === 2
+            ? `${sums[0]} の山を2マス進む`
+            : `${sums[0]} の山を1マス進む`;
+        }
+
+        if (playable.length === 2) {
+          return `${sums[0]} と ${sums[1]} の山を1マスずつ進む`;
+        }
+
+        return `${playable[0]} の山だけ1マス進む`;
       }
 
       function phaseLabel() {
@@ -717,7 +741,7 @@
 
         applyMove(opt.sums);
         state.rolled = false;
-        state.message = `「${opt.sums[0]} と ${opt.sums[1]} の山」を進めました。さらに登るなら「登山を続ける」、ここで終えるなら「キャンプを張る」を押してください。`;
+        state.message = `「${describeSums(opt.sums)}」を実行しました。さらに登るなら「登山を続ける」、ここで終えるなら「キャンプを張る」を押してください。`;
         state.messageType = "normal";
         render();
       }
