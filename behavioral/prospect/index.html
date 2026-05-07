@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Prospect Theory Interactive Plots</title>
+</head>
+<body>
+
+<h2>Probability Weighting Function</h2>
+<svg id="plot" width="600" height="450"></svg>
+
+<div style="font-size: 18px; margin-top: 10px;">
+  c = <span id="cval">0.61</span>
+  <input id="slider" type="range" min="0.3" max="1.5" step="0.01" value="0.61">
+</div>
+
+<h2 style="margin-top: 40px;">Value Function</h2>
+<svg id="valuePlot" width="600" height="450"></svg>
+
+<div style="font-size: 18px; margin-top: 10px;">
+  α = <span id="alphaval">0.88</span>
+  <input id="alphaSlider" type="range" min="0.3" max="1.2" step="0.01" value="0.88">
+</div>
+<div style="font-size: 18px; margin-top: 10px;">
+  β = <span id="betaval">0.88</span>
+  <input id="betaSlider" type="range" min="0.3" max="1.2" step="0.01" value="0.88">
+</div>
+<div style="font-size: 18px; margin-top: 10px;">
+  λ = <span id="lambdaval">1.80</span>
+  <input id="lambdaSlider" type="range" min="1" max="4" step="0.01" value="1.8">
+</div>
+<div style="font-size: 18px; margin-top: 10px;">
+  r = <span id="rval">0.00</span>
+  <input id="rSlider" type="range" min="-5" max="5" step="0.1" value="0">
+</div>
+
+<script>
+const svg = document.getElementById("plot");
+const slider = document.getElementById("slider");
+const cval = document.getElementById("cval");
+const valueSvg = document.getElementById("valuePlot");
+const alphaSlider = document.getElementById("alphaSlider");
+const betaSlider = document.getElementById("betaSlider");
+const lambdaSlider = document.getElementById("lambdaSlider");
+const rSlider = document.getElementById("rSlider");
+const alphaval = document.getElementById("alphaval");
+const betaval = document.getElementById("betaval");
+const lambdaval = document.getElementById("lambdaval");
+const rval = document.getElementById("rval");
+
+const width = 600;
+const height = 450;
+const margin = 50;
+const plotW = width - 2 * margin;
+const plotH = height - 2 * margin;
+
+function weight(p, c) {
+  if (p === 0) return 0;
+  if (p === 1) return 1;
+
+  return Math.pow(p, c) /
+    Math.pow(Math.pow(p, c) + Math.pow(1 - p, c), 1 / c);
+}
+
+function xScale(p) {
+  return margin + p * plotW;
+}
+
+function yScale(y) {
+  return height - margin - y * plotH;
+}
+
+function makePath(c) {
+  let d = "";
+  for (let i = 0; i <= 1000; i++) {
+    const p = i / 1000;
+    const x = xScale(p);
+    const y = yScale(weight(p, c));
+    d += (i === 0 ? "M" : "L") + x + "," + y + " ";
+  }
+  return d;
+}
+
+function draw(c) {
+  svg.innerHTML = "";
+  svg.setAttribute("viewBox", `0 0 ${width} ${height}`);
+
+  // axes
+  svg.innerHTML += `<line x1="${margin}" y1="${height-margin}" x2="${width-margin}" y2="${height-margin}" stroke="black"/>`;
+  svg.innerHTML += `<line x1="${margin}" y1="${height-margin}" x2="${margin}" y2="${margin}" stroke="black"/>`;
+
+  // 45-degree line: Matplotlib orange
+  svg.innerHTML += `<line x1="${xScale(0)}" y1="${yScale(0)}" x2="${xScale(1)}" y2="${yScale(1)}" stroke="#ff7f0e" stroke-width="2" stroke-dasharray="8,6"/>`;
+
+  // weighting function: Matplotlib blue
+  svg.innerHTML += `<path d="${makePath(c)}" fill="none" stroke="#1f77b4" stroke-width="3"/>`;
+
+  // labels
+  svg.innerHTML += `<text x="${width/2}" y="${height-10}" text-anchor="middle" font-size="18">p</text>`;
+  svg.innerHTML += `<text x="18" y="${height/2}" text-anchor="middle" font-size="18" transform="rotate(-90, 18, ${height/2})">π(p)</text>`;
+}
+
+draw(0.61);
+
+slider.addEventListener("input", function() {
+  const c = parseFloat(slider.value);
+  cval.textContent = c.toFixed(2);
+  draw(c);
+});
+
+function valueFunction(x, alpha, beta, lambda, r) {
+  if (x >= r) {
+    return Math.pow(x - r, alpha);
+  }
+  return -lambda * Math.pow(r - x, beta);
+}
+
+function valueXScale(x) {
+  return margin + ((x + 10) / 20) * plotW;
+}
+
+function valueYScale(y) {
+  const yMin = -11;
+  const yMax = 11;
+  return height - margin - ((y - yMin) / (yMax - yMin)) * plotH;
+}
+
+function makeValuePath(alpha, beta, lambda, r) {
+  let d = "";
+  for (let i = 0; i <= 1000; i++) {
+    const x = -10 + (20 * i) / 1000;
+    const svgX = valueXScale(x);
+    const svgY = valueYScale(valueFunction(x, alpha, beta, lambda, r));
+    d += (i === 0 ? "M" : "L") + svgX + "," + svgY + " ";
+  }
+  return d;
+}
+
+function drawValueFunction(alpha, beta, lambda, r) {
+  valueSvg.innerHTML = "";
+  valueSvg.setAttribute("viewBox", `0 0 ${width + 80} ${height}`);
+
+  // Add clip path for the value function curve
+  const clipX = valueXScale(-10);
+  const clipY = valueYScale(10);
+  const clipWidth = valueXScale(10) - valueXScale(-10);
+  const clipHeight = valueYScale(-10) - valueYScale(10);
+
+  valueSvg.innerHTML += `
+    <defs>
+      <clipPath id="valueClip">
+        <rect x="${clipX}" y="${clipY}" width="${clipWidth}" height="${clipHeight}" />
+      </clipPath>
+    </defs>
+  `;
+
+  // axes
+  valueSvg.innerHTML += `<line x1="${valueXScale(-10)}" y1="${valueYScale(0)}" x2="${valueXScale(10)}" y2="${valueYScale(0)}" stroke="black" stroke-width="1.2"/>`;
+  valueSvg.innerHTML += `<line x1="${valueXScale(0)}" y1="${valueYScale(-10)}" x2="${valueXScale(0)}" y2="${valueYScale(10)}" stroke="black" stroke-width="1.2"/>`;
+
+  // reference point
+  valueSvg.innerHTML += `<line x1="${valueXScale(r)}" y1="${valueYScale(-10)}" x2="${valueXScale(r)}" y2="${valueYScale(10)}" stroke="black" stroke-width="1.2" stroke-dasharray="8,6"/>`;
+
+  // value function: Matplotlib blue, clipped to axes
+  valueSvg.innerHTML += `<path d="${makeValuePath(alpha, beta, lambda, r)}" fill="none" stroke="#1f77b4" stroke-width="3" clip-path="url(#valueClip)"/>`;
+
+  // labels (placed just beyond the visible axes)
+  // x label: just to the right of the x-axis endpoint
+  valueSvg.innerHTML += `<text x="${valueXScale(10) + 12}" y="${valueYScale(0) - 8}" text-anchor="start" font-size="18">x</text>`;
+
+  // y label: just above the y-axis endpoint
+  valueSvg.innerHTML += `<text x="${valueXScale(0) + 8}" y="${valueYScale(10) - 10}" text-anchor="start" font-size="18">v(x | r)</text>`;
+}
+
+function updateValueFunction() {
+  const alpha = parseFloat(alphaSlider.value);
+  const beta = parseFloat(betaSlider.value);
+  const lambda = parseFloat(lambdaSlider.value);
+  const r = parseFloat(rSlider.value);
+
+  alphaval.textContent = alpha.toFixed(2);
+  betaval.textContent = beta.toFixed(2);
+  lambdaval.textContent = lambda.toFixed(2);
+  rval.textContent = r.toFixed(2);
+
+  drawValueFunction(alpha, beta, lambda, r);
+}
+
+drawValueFunction(0.88, 0.88, 1.8, 0);
+
+alphaSlider.addEventListener("input", updateValueFunction);
+betaSlider.addEventListener("input", updateValueFunction);
+lambdaSlider.addEventListener("input", updateValueFunction);
+rSlider.addEventListener("input", updateValueFunction);
+</script>
+
+</body>
+</html>
